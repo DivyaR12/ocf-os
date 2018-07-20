@@ -35,6 +35,8 @@ struct ocDeviceType {
   std::string deviceName = "";
   bool isLight = false;
   bool isInCse = false;
+  bool gotValue = false;
+  bool value = false;
   uriToResourceMapType resources;
 };
 
@@ -57,21 +59,19 @@ void postSwitchValue(std::shared_ptr<OC::OCResource> resource, bool value) {
   resource->post(rep, QueryParamsMap(), &onPostSwitch);
 }
 
-
-void onGetSwitch(const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-  std::cout << "On Get Switch!" << std::endl;
-  if (eCode == OC_STACK_OK) {
-    bool value;
-    bool found;
-    found = rep.getValue("value", value);
-    if (found)
-      std::cout<< "Light switch value: "<< value << std::endl;
-    else
-      std::cout<< "NOT found a value" << std::endl;
-    
-  } else
-   std::cout << "Stack error in onGetSwitch!" << std::endl;
+void getOcfSwitchResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
+  auto onGetSwitchLambda = [resourceSid] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
+    std::cout << "On Get Switch Lambda!" << std::endl;
+    std::unique_lock<std::mutex> lock(foundDevicesMutex);
+    if (eCode == OC_STACK_OK && foundDevices.find(resourceSid)!=foundDevices.end()) {
+      foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
+    } else
+     std::cout << "Stack error in onGetSwitch or can't match SID!" << std::endl;
+  };
+  QueryParamsMap test;
+  resource->get(test, onGetSwitchLambda);
 }
+
 
 
 void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
@@ -124,8 +124,7 @@ void foundResource(std::shared_ptr<OC::OCResource> resource) {
     getOcfDeviceResource(resource, resourceSid);
 
   if (resourceUri == "/binaryswitch") {
-    QueryParamsMap test;
-    resource->get(test, &onGetSwitch);
+    getOcfSwitchResource(resource, resourceSid);
     postSwitchValue(resource, 0);
   }   
 
@@ -218,6 +217,44 @@ long createContainer (const ::std::string & addr, const ::std::string & name) {
   return result;
 }
 
+long createContentInstance(const std::string& address, const std::string value) {
+  long result;
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+  
+  auto ci = ::onem2m::contentInstance();
+  ci.contentInfo("application/text");
+  ci.content (value);
+  respObj = ::onem2m::createResource(address, "1234", ci, result, respObjType); 
+  std::cout << "Create content instance result:" << result << "\n";
+  return result;
+} 
+
+long createSubscription (const ::std::string& objectAddress, const std::string& notifUri) {
+  long result;
+  
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+  auto sub = ::onem2m::subscription();
+  auto uris = ::onem2m::listOfURIs();
+  auto criteria = ::onem2m::eventNotificationCriteria();
+  // If the complexType is declared in-line in the XSD file then the CodeSynthesis compiler generates an
+  // automatically named type within the parent class - see example below
+  auto events = ::onem2m::eventNotificationCriteria::notificationEventType_sequence();
+
+  sub.resourceName("subscription");
+  events.push_back( ::onem2m::updateOfResource ); // Add one notification case to the list of notification events
+  criteria.notificationEventType(events); // Assign the list of events to the criteria
+  sub.eventNotificationCriteria(criteria); // Assign the criteria to the subscription
+  sub.notificationContentType(nctAllAttributes);
+  uris.push_back(notifUri); // Add one notification URI
+  sub.notificationURI(uris);
+  sub.latestNotify(true);
+  respObj = ::onem2m::createResource(objectAddress, "1234", sub, result, respObjType);   
+  std::cout << "Create subscription result:" << result << "\n";
+  return result;
+}
+
 long deleteResources (const ::std::string & addr) {
   long result;
   ::xml_schema::integer respObjType;
@@ -229,8 +266,7 @@ long deleteResources (const ::std::string & addr) {
   return result;
 }
 
-
-void updateCseContainers (const std::string & aeAddr) {
+void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
   std::unique_lock<std::mutex> lock(foundDevicesMutex);
   long result;
   for (auto & x : foundDevices) {
@@ -240,12 +276,52 @@ void updateCseContainers (const std::string & aeAddr) {
       if (result == onem2mHttpCREATED) {
         x.second.isInCse = true;
         std::cout<<"Container created, name: "<<x.second.deviceName<<std::endl;
+        if (x.second.gotValue) {
+          result = createContentInstance(aeAddr+"/"+x.second.deviceName,x.second.value?"1":"0");
+          if (result == onem2mHttpCREATED) 
+            std::cout << "CI Created" << std::endl;
+          else
+            std::cout <<"Error creating CI: "<< result << std::endl;
+        }
+        result = createSubscription( aeAddr+"/"+x.second.deviceName, poa);
+        if (result == onem2mHttpCREATED) 
+          std::cout << "Subscription Created" << std::endl;
+        else
+          std::cout <<"Error creating Subscription: "<< result << std::endl;
       } else
         std::cout<<"Error creating container: "<< result <<std::endl;
     }
   }
 }
 
+onem2mResponseStatusCode processNotification(std::string host, std::string& from, notification* notif ) {
+
+  if (notif->verificationRequest().present () && notif->verificationRequest().get()) { // Check if this is a vefification request
+    // Whether to accept the verificationRequest could be decided here, e.g. by checking the "host" and "from" parameters.
+    // In this implmentation we accept all verification requests.
+    
+    std::cout << "Notification verification from:" << from << "r\n" ;
+    from = getFrom();
+    return rcOK;
+  }
+  from = getFrom();
+  std::cout << "\r\n";
+//  outputObject( operationTypeNotification, notif);
+ 
+  return rcOK;
+
+}
+
+long startServer (const std::string & poaPort) {
+  // Start an HTTP server
+  long result;
+  result = startHttpServer(std::vector< std::string >(),::std::stoi( poaPort ), &processNotification);
+  if (result == long(onem2mHttpOK))
+    std::cout << "HTTP Server started OK\n";
+  else
+    std::cout << "HTTP Server didn't start. Check port is not already in use. Result =" << result << "\n";
+  return result;
+}
 
 std::string stringToHexString(const std::string& input) {
   static const char* const lut = "0123456789abcdef";
@@ -295,6 +371,8 @@ int main (int argc, char* argv[]) {
   ::std::string bridgeAeId;
   ::std::string fromField = "admin:admin";
   ::std::string aeResourceName = "OCFBridge";
+  ::std::string poaPort = "18888";
+  ::std::string poaAddr = "127.0.0.1";
   bool deleteAe = false;
 
   OCPersistentStorage ps{fopen, fread, fwrite, fclose, unlink};
@@ -314,7 +392,8 @@ int main (int argc, char* argv[]) {
   sigaction(SIGINT, &sa, NULL);
   std::cout << "Press Ctrl-C to quit...." << std::endl;
 
-  enum { optHostName, optAddress, optFrom, optPskIdentity, optPskKey, optPskKeyAscii, optDeleteAe };
+  enum { optHostName, optAddress, optFrom, optPskIdentity, optPskKey, optPskKeyAscii, optDeleteAe,
+         optPoaPort, optPoaAddr };
   CSimpleOpt::SOption  cmdOptions[] = {
   { optPskIdentity, "--pskIdentity", SO_REQ_SEP},
   { optPskKey, "--pskKey", SO_REQ_SEP},
@@ -322,6 +401,8 @@ int main (int argc, char* argv[]) {
   { optDeleteAe, "--deleteAe", SO_NONE },
   { optHostName, "-h", SO_REQ_SEP },
   { optAddress, "-a", SO_REQ_SEP },
+  { optPoaPort, "--poaPort", SO_REQ_SEP },
+  { optPoaAddr, "--poaAddr", SO_REQ_SEP },
   { optFrom, "-f", SO_REQ_SEP },
   SO_END_OF_OPTIONS 
   };
@@ -349,6 +430,12 @@ int main (int argc, char* argv[]) {
         case optPskKeyAscii:
            setPskKey( stringToHexString( args.OptionArg() ) );
            break;
+        case optPoaPort:
+           poaPort = args.OptionArg();
+           break;
+        case optPoaAddr:
+           poaAddr = args.OptionArg();
+           break;
         case optDeleteAe:
            deleteAe=true;
            break;
@@ -366,6 +453,9 @@ int main (int argc, char* argv[]) {
 
 
   setFrom(fromField);
+
+  startServer(poaPort);   
+
   ::xml_schema::integer respObjType;
   std::unique_ptr< ::xml_schema::type > respObj;
   long result;
@@ -390,7 +480,7 @@ int main (int argc, char* argv[]) {
 
   do {
     usleep(2000000);
-    updateCseContainers (cseRootAddr+"/"+aeResourceName);
+    updateCseContainers (cseRootAddr+"/"+aeResourceName, "http://"+poaAddr+":"+poaPort+"/");
   } while (quit != 1);
 
   // Perform platform clean up.
