@@ -15,6 +15,7 @@
 #include <exception> 
 #include <mutex>
 #include <map>
+#include <algorithm>
 
 #include "ocstack.h"
 #include "OCPlatform.h"
@@ -31,7 +32,7 @@ namespace PH = std::placeholders;
 typedef std::map <std::string, std::shared_ptr<OC::OCResource> > uriToResourceMapType;
 
 struct ocDeviceType {
-  std::string deviceName;
+  std::string deviceName = "";
   bool isLight = false;
   bool isInCse = false;
   uriToResourceMapType resources;
@@ -73,34 +74,29 @@ void onGetSwitch(const HeaderOptions& headerOptions, const OCRepresentation& rep
 }
 
 
-void onGet(const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-  std::cout << "On Get!" << std::endl;
-  if (eCode == OC_STACK_OK) {
-    std::string name;
-    rep.getValue("n", name);
-    std::cout << "\tDevice Name: " << name << std::endl;
-    std::string piid;
-    rep.getValue("piid", piid);
-    std::cout << "\tPiid: " << piid << std::endl;
-    std::string di;
-    rep.getValue("di", di);
-    std::cout << "\tdi: "<< di << std::endl;
-    std::string host;
-    host = rep.getHost();
-    std::cout << "\tHost: " << host << std::endl;
-    {
-      std::unique_lock<std::mutex> lock(foundDevicesMutex);
-      if (foundDevices.find(di)!=foundDevices.end()) {
-        foundDevices[di].deviceName = name;
-        std::cout << "\tStored name in foundDevices" << std::endl;
+void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
+ auto onGetLambda = [resourceSid] ( const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
+   std::cout << "On Get Lambda!" << std::endl;
+    if (eCode == OC_STACK_OK) {
+      std::string name;
+      rep.getValue("n", name);
+      std::replace( name.begin(), name.end(), ' ', '_'); // Remove whitespace in names
+      auto types = rep.getResourceTypes();
+      {
+        std::unique_lock<std::mutex> lock(foundDevicesMutex);
+        if (foundDevices.find(resourceSid)!=foundDevices.end()) {
+          foundDevices[resourceSid].deviceName = name;
+          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end();
+           std::cout << "\tStored name in foundDevices" << std::endl;
+        } else
+        std::cout << "\tError: found name for unknown SID: " << resourceSid << std::endl;
       }
-      else
-        std::cout << "\tError: found name for unknown SID: " << di << std::endl;
-    }
-  } else
-   std::cout << "Stack error in onGet!" << std::endl;
+    } else
+       std::cout << "Stack error in onGet!" << std::endl;
+  }; // End of onGetLambda
+  QueryParamsMap test;
+  resource->get(test, onGetLambda);
 }
-
 
 
 void foundResource(std::shared_ptr<OC::OCResource> resource) {
@@ -124,28 +120,9 @@ void foundResource(std::shared_ptr<OC::OCResource> resource) {
       return;
     }
   }
-  if (resourceUri == "/oic/d") {
+  if (resourceUri == "/oic/d")
+    getOcfDeviceResource(resource, resourceSid);
 
-    auto onGetLambda = [resourceSid] ( const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-      std::cout << "On Get Lambda!" << std::endl;
-      if (eCode == OC_STACK_OK) {
-        std::string name;
-        rep.getValue("n", name);
-        {
-          std::unique_lock<std::mutex> lock(foundDevicesMutex);
-          if (foundDevices.find(resourceSid)!=foundDevices.end()) {
-              foundDevices[resourceSid].deviceName = name;
-              std::cout << "\tStored name in foundDevices" << std::endl;
-          } else
-          std::cout << "\tError: found name for unknown SID: " << resourceSid << std::endl;
-        }
-      } else
-         std::cout << "Stack error in onGet!" << std::endl;
-    }; // End of onGetLambda
-
-    QueryParamsMap test;
-    resource->get(test, onGetLambda);
-  }
   if (resourceUri == "/binaryswitch") {
     QueryParamsMap test;
     resource->get(test, &onGetSwitch);
@@ -157,6 +134,9 @@ void foundResource(std::shared_ptr<OC::OCResource> resource) {
     std::cout << "\t\t" << resourceTypes << std::endl;
   }
 }
+
+
+
 
 std::unique_ptr< ::xml_schema::type >  retrieveResources (const ::std::string & cse_root_addr, long & result,  		::xml_schema::integer & respObjType) {
   std::unique_ptr< ::xml_schema::type > respObj;
@@ -193,8 +173,9 @@ long createAE(const ::std::string & cseRootAddr, const ::std::string & appId, co
   ::xml_schema::integer respObjType;
   std::unique_ptr< ::xml_schema::type > respObj;
 
-  setFrom(aeId);
   auto ae = AE();
+  if (!resourceName.empty())
+    ae.resourceName(resourceName);
   ae.App_ID(appId);
   ae.requestReachability(false); // The CSE can't send us a requestPrimitive directly (because we don't have an HTTP server to receive it)
   if (labelText.length()>0) {
@@ -222,6 +203,21 @@ long createAE(const ::std::string & cseRootAddr, const ::std::string & appId, co
   return result;
 }
 
+long createContainer (const ::std::string & addr, const ::std::string & name) {
+  long result;
+  
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+
+  auto c = container();
+  c.resourceName(name);
+  c.maxNrOfInstances( 1 );
+  respObj = createResource(addr, "1234", c, result, respObjType);  
+  std::cout << "Create container result:" << result << "\n";
+
+  return result;
+}
+
 long deleteResources (const ::std::string & addr) {
   long result;
   ::xml_schema::integer respObjType;
@@ -231,6 +227,23 @@ long deleteResources (const ::std::string & addr) {
   respObj = deleteResource(addr, "9876", result, respObjType); 
   std::cout << "Delete result:" << result << "\n";
   return result;
+}
+
+
+void updateCseContainers (const std::string & aeAddr) {
+  std::unique_lock<std::mutex> lock(foundDevicesMutex);
+  long result;
+  for (auto & x : foundDevices) {
+    if (x.second.isLight && (! x.second.isInCse) && (! x.second.deviceName.empty())) {
+      std::cout << "New light: "<<x.second.deviceName<<std::endl;
+      result = createContainer(aeAddr, x.second.deviceName);
+      if (result == onem2mHttpCREATED) {
+        x.second.isInCse = true;
+        std::cout<<"Container created, name: "<<x.second.deviceName<<std::endl;
+      } else
+        std::cout<<"Error creating container: "<< result <<std::endl;
+    }
+  }
 }
 
 
@@ -281,7 +294,7 @@ int main (int argc, char* argv[]) {
   ::std::string cseRootAddr = "/in-cse/in-name"; 
   ::std::string bridgeAeId;
   ::std::string fromField = "admin:admin";
-  ::std::string aeResourceName;
+  ::std::string aeResourceName = "OCFBridge";
   bool deleteAe = false;
 
   OCPersistentStorage ps{fopen, fread, fwrite, fclose, unlink};
@@ -377,6 +390,7 @@ int main (int argc, char* argv[]) {
 
   do {
     usleep(2000000);
+    updateCseContainers (cseRootAddr+"/"+aeResourceName);
   } while (quit != 1);
 
   // Perform platform clean up.
