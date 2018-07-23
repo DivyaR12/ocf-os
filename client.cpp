@@ -30,6 +30,7 @@ using namespace ::onem2m;
 namespace PH = std::placeholders;
 
 typedef std::map <std::string, std::shared_ptr<OC::OCResource> > uriToResourceMapType;
+typedef std::map <std::string, std::string> subRiToSidMapType;
 
 struct ocDeviceType {
   std::string deviceName = "";
@@ -44,6 +45,7 @@ typedef std::map <std::string, ocDeviceType > sidToDeviceMapType;
 
 sidToDeviceMapType foundDevices;
 std::mutex foundDevicesMutex;
+subRiToSidMapType subRiToSidMap;
 
 
 
@@ -123,10 +125,8 @@ void foundResource(std::shared_ptr<OC::OCResource> resource) {
   if (resourceUri == "/oic/d")
     getOcfDeviceResource(resource, resourceSid);
 
-  if (resourceUri == "/binaryswitch") {
+  if (resourceUri == "/binaryswitch")
     getOcfSwitchResource(resource, resourceSid);
-    postSwitchValue(resource, 0);
-  }   
 
   std::cout << "\tList of resource types: " << std::endl;
   for(auto &resourceTypes : resource->getResourceTypes()) {
@@ -230,7 +230,7 @@ long createContentInstance(const std::string& address, const std::string value) 
   return result;
 } 
 
-long createSubscription (const ::std::string& objectAddress, const std::string& notifUri) {
+long createSubscription (const ::std::string& objectAddress, const std::string& notifUri, std::string& subsRi) {
   long result;
   
   ::xml_schema::integer respObjType;
@@ -250,7 +250,12 @@ long createSubscription (const ::std::string& objectAddress, const std::string& 
   uris.push_back(notifUri); // Add one notification URI
   sub.notificationURI(uris);
   sub.latestNotify(true);
-  respObj = ::onem2m::createResource(objectAddress, "1234", sub, result, respObjType);   
+  respObj = ::onem2m::createResource(objectAddress, "1234", sub, result, respObjType);
+  if (respObjType == resourceTypeSubscription) {
+    auto sPtr = static_cast< subscription* >(respObj.get()); 
+    if (sPtr->resourceID().present ())
+      subsRi= sPtr->resourceID() . get();
+  }
   std::cout << "Create subscription result:" << result << "\n";
   return result;
 }
@@ -283,10 +288,13 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
           else
             std::cout <<"Error creating CI: "<< result << std::endl;
         }
-        result = createSubscription( aeAddr+"/"+x.second.deviceName, poa);
-        if (result == onem2mHttpCREATED) 
-          std::cout << "Subscription Created" << std::endl;
-        else
+        std::string subResId = "";
+        result = createSubscription( aeAddr+"/"+x.second.deviceName, poa, subResId);
+        if (result == onem2mHttpCREATED && !subResId.empty()) {
+          std::cout << "Subscription Created. ID: " << subResId << std::endl;
+          if (!subResId.empty())
+            subRiToSidMap[subResId] = x.first;
+        } else
           std::cout <<"Error creating Subscription: "<< result << std::endl;
       } else
         std::cout<<"Error creating container: "<< result <<std::endl;
@@ -296,18 +304,43 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
 
 onem2mResponseStatusCode processNotification(std::string host, std::string& from, notification* notif ) {
 
-  if (notif->verificationRequest().present () && notif->verificationRequest().get()) { // Check if this is a vefification request
+  if (notif && notif->verificationRequest().present () && notif->verificationRequest().get()) { // Check if this is a vefification request
     // Whether to accept the verificationRequest could be decided here, e.g. by checking the "host" and "from" parameters.
     // In this implmentation we accept all verification requests.
     
-    std::cout << "Notification verification from:" << from << "r\n" ;
+    std::cout << "Notification verification from:" << from << std::endl ;
     from = getFrom();
     return rcOK;
   }
-  from = getFrom();
-  std::cout << "\r\n";
-//  outputObject( operationTypeNotification, notif);
- 
+  if ( notif ) {
+    std::cout << "Notification" << std::endl;
+    if (notif->subscriptionReference().present()) {
+      std::unique_lock<std::mutex> lock(foundDevicesMutex);
+      auto thisSidPair = subRiToSidMap.find(notif->subscriptionReference().get());
+      if(thisSidPair != subRiToSidMap.end()) {
+        std::cout << "\tSID: " << thisSidPair->second << std::endl;
+        auto  thisDevice = foundDevices.find(thisSidPair -> second);
+        if (thisDevice != foundDevices.end() && thisDevice->second.isLight && 
+            thisDevice->second.resources.find("/binaryswitch") != thisDevice->second.resources.end()) {
+          std::cout << "\tFound OCF light record" <<std::endl;
+          ::xml_schema::integer rot;
+          ::xml_schema::type* resObjPtr;
+          resObjPtr = notif->getRepresentationObject(rot);
+          if (rot == resourceTypeContentInstance) {
+             auto ciPtr = static_cast< contentInstance* >(resObjPtr);
+             if (ciPtr->content().present()) {
+               bool newValue = ciPtr->content().get()=="1";
+               std::cout << "\tNew value: "<< newValue << std::endl;
+               postSwitchValue(thisDevice->second.resources.find("/binaryswitch")->second, 
+                               newValue);
+               thisDevice->second.value = newValue;
+             }
+          }
+        }
+      } else 
+        std::cout << "\tSubscription ID not found." << std::endl;
+    }
+  }
   return rcOK;
 
 }
