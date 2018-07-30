@@ -495,7 +495,7 @@ int main (int argc, char* argv[]) {
 
   if (deleteAe) {
     std::cout << "Deleting AE \r\n";
-    deleteResources(fromField);
+    deleteResources(cseRootAddr +"/"+aeResourceName);
     ::onem2m::terminate();
     return 0;
   }
