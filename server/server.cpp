@@ -240,25 +240,16 @@ class c_binaryswitchResource : public Resource
             {
                 // no error: assign the variables
                  
-                try {
-                    if (rep.getValue(m_var_name_n, m_var_value_n ))
-                    {
-                        std::cout << "\t\t" << "property 'n' : " << m_var_value_n << std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "\t\t" << "property 'n' not found in the representation" << std::endl;
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    std::cout << e.what() << std::endl;
-                }
+
             
                 try {
                     if (rep.getValue(m_var_name_value, m_var_value_value ))
                     {
-                        std::cout << "\t\t" << "property 'value': " << m_var_value_value << std::endl;
+ //                       std::cout << "\t\t" << "property 'value': " << m_var_value_value << std::endl;
+                        if ( m_var_value_value )
+                          std::cout << "LIGHT ON"<<std::endl;
+                        else
+                          std::cout << "LIGHT OFF"<<std::endl;
                     }
                     else
                     {
@@ -270,69 +261,7 @@ class c_binaryswitchResource : public Resource
                     std::cout << e.what() << std::endl;
                 }
              
-                // array only works for integer, boolean, numbers and strings
-                // TODO: make it also work with array of objects
-                try {
-                    if (rep.hasAttribute(m_var_name_rt))
-                    {
-                        rep.getValue(m_var_name_rt, m_var_value_rt);
-                        int first = 1;
-                        std::cout << "\t\t" << "property 'rt' : " ;
-                        for(auto myvar: m_var_value_rt)
-                        {
-                            if(first)
-                            {
-                                std::cout << myvar;
-                                first = 0;
-                            }
-                            else
-                            {
-                                std::cout << "," << myvar;
-                            }
-                        }
-                        std::cout <<  std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "\t\t" << "property 'rt' not found in the representation" << std::endl;
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    std::cout << e.what() << std::endl;
-                }
-             
-                // array only works for integer, boolean, numbers and strings
-                // TODO: make it also work with array of objects
-                try {
-                    if (rep.hasAttribute(m_var_name_if))
-                    {
-                        rep.getValue(m_var_name_if, m_var_value_if);
-                        int first = 1;
-                        std::cout << "\t\t" << "property 'if' : " ;
-                        for(auto myvar: m_var_value_if)
-                        {
-                            if(first)
-                            {
-                                std::cout << myvar;
-                                first = 0;
-                            }
-                            else
-                            {
-                                std::cout << "," << myvar;
-                            }
-                        }
-                        std::cout <<  std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "\t\t" << "property 'if' not found in the representation" << std::endl;
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    std::cout << e.what() << std::endl;
-                }
+     
             
             }            
             return ehResult;            
