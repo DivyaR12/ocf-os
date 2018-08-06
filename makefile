@@ -17,11 +17,14 @@ LINKEDLIBS= -L$(IOTIVITY_PATH) -Wl,-rpath=$(IOTIVITY_PATH) \
 
 all: client
 
-client: client.o
-	c++ $(LINKFLAGS) -o client client.o $(LINKEDLIBS)
+client: client.o ocflightclient.o
+	c++ $(LINKFLAGS) -o client client.o ocflightclient.o $(LINKEDLIBS)
 
-client.o: client.cpp
+client.o: client.cpp ocflightclient.hpp
 	c++ $(COMPFLAGS) -c client.cpp
+
+ocflightclient.o: ocflightclient.cpp ocflightclient.hpp
+	c++ $(COMPFLAGS) -c ocflightclient.cpp
 
 clean:
 	rm -f *.o client

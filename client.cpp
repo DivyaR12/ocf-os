@@ -8,164 +8,11 @@
 
 #define __WITH_DTLS__
 
-#include <signal.h>
-#include <thread>
-#include <functional>
-#include <string>
-#include <iostream>
-#include <memory>
-#include <exception> 
-#include <mutex>
-#include <map>
-#include <algorithm>
-
-#include "ocstack.h"
-#include "OCPlatform.h"
-#include "OCApi.h"
-#include "ocpayload.h"
+#include "ocflightclient.hpp"
 #include "onem2m.hxx"
 #include "SimpleOpt.h"
 
-
-using namespace OC;
 using namespace ::onem2m;
-
-namespace PH = std::placeholders;
-
-typedef std::map <std::string, std::shared_ptr<OC::OCResource> > uriToResourceMapType;
-typedef std::map <std::string, std::string> subRiToSidMapType;
-
-struct ocDeviceType {
-  std::string deviceName = "";
-  bool isLight = false;
-  bool isInCse = false;
-  bool gotValue = false;
-  bool value = false;
-  uriToResourceMapType resources;
-};
-
-typedef std::map <std::string, ocDeviceType > sidToDeviceMapType;
-
-sidToDeviceMapType foundDevices;
-std::mutex foundDevicesMutex;
-subRiToSidMapType subRiToSidMap;
-
-
-
-
-void onPostSwitch(const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-  if (eCode == OC_STACK_OK || eCode == OC_STACK_RESOURCE_CREATED || eCode == OC_STACK_RESOURCE_CHANGED)
-    std::cout << "POST request was successful" << std::endl;
-}
-
-void postSwitchValue(std::shared_ptr<OC::OCResource> resource, bool value) {
-  OCRepresentation rep;
-  rep.setValue("value", value);
-  resource->post(rep, QueryParamsMap(), &onPostSwitch);
-}
-
-void getOcfSwitchResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
-  auto onGetSwitchLambda = [resourceSid] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-    std::cout << "On Get Switch Lambda!" << std::endl;
-    std::unique_lock<std::mutex> lock(foundDevicesMutex);
-    if (eCode == OC_STACK_OK && foundDevices.find(resourceSid)!=foundDevices.end()) {
-      foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
-      std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
-    } else
-     std::cout << "\tStack error in onGetSwitch or can't match SID!. ecode: " << eCode << std::endl;
-  };
-  std::cout << "getOcfSwitchResource. Host: " << resource->host() << std::endl;
-  QueryParamsMap test;
-  resource->get(test, onGetSwitchLambda);
-}
-
-
-
-void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
- auto onGetLambda = [resourceSid] ( const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-   std::cout << "On Get Lambda!" << std::endl;
-    if (eCode == OC_STACK_OK) {
-      std::string name;
-      rep.getValue("n", name);
-      std::replace( name.begin(), name.end(), ' ', '_'); // Remove whitespace in names
-      auto types = rep.getResourceTypes();
-      {
-        std::unique_lock<std::mutex> lock(foundDevicesMutex);
-        if (foundDevices.find(resourceSid)!=foundDevices.end()) {
-          foundDevices[resourceSid].deviceName = name;
-          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end();
-           std::cout << "\tStored name in foundDevices" << std::endl;
-        } else
-        std::cout << "\tError: found name for unknown SID: " << resourceSid << std::endl;
-      }
-    } else
-       std::cout << "Stack error in onGet!" << std::endl;
-  }; // End of onGetLambda
-  QueryParamsMap test;
-  resource->get(test, onGetLambda);
-}
-
-void setOcfResourceHostCoaps(std::shared_ptr<OC::OCResource> resource) {
-  std::cout<<"Current host: "<< resource->host()<< std::endl;
-  auto hosts = resource->getAllHosts();
-  const std::string coap6url="coaps://[";
-  const std::string coap4url="coaps://";
-  std::string ip6coaps="";
-  std::string ip4coaps="";
-  for( auto h:hosts) {
-    std::cout<<"\tHost: " << h << std::endl;
-    if (h.compare(0, coap6url.length(), coap6url) == 0)
-      ip6coaps=h;
-    else if (h.compare(0, coap4url.length(), coap4url) == 0)
-      ip4coaps=h;
-  }/*
-  if (!ip6coaps.empty()) {
-    std::cout << "Setting host to: " << ip6coaps << std::endl;
-    resource->setHost(ip6coaps);
-  } else */
-if (!ip4coaps.empty()) {
-    std::cout << "\tSetting host to: " << ip4coaps << std::endl;
-    resource->setHost(ip4coaps);
-    std::cout <<"\tHost is now: "<< resource->host()<<std::endl;
-    std::cout <<"\tTransport is now: "<<resource->connectivityType()<<std::endl;
-  }
-}
-
-void foundResource(std::shared_ptr<OC::OCResource> resource) {
-  std::cout << "Found resource" << std::endl;
-  std::unique_lock<std::mutex> lock(foundDevicesMutex);
-  auto resourceSid = resource->sid();
-  std::cout << "Found resource " << resource->uniqueIdentifier() <<
-                " on server with ID: "<< resourceSid <<std::endl;
-  auto resourceUri = resource->uri();
-  std::cout << "\tURI of the resource: " << resourceUri << std::endl;
-
-  if (foundDevices.find(resourceSid)==foundDevices.end()) {
-    std::cout << "\tNew SID: " << resourceSid << std::endl;
-    foundDevices[resourceSid].resources[resourceUri]=resource;
-  } else {
-    if (foundDevices[resourceSid].resources.find(resourceUri) == foundDevices[resourceSid].resources.end()) {
-      std::cout << "\tExisting SID and new URI" << std::endl;
-      foundDevices[resourceSid].resources[resourceUri]=resource;
-    } else {
-      std::cout << "\tExisting SID and existing URI" << std::endl;
-      return;
-    }
-  }
-  if (resourceUri == "/oic/d")
-    getOcfDeviceResource(resource, resourceSid);
-  
-  if (resourceUri == "/binaryswitch") {
-    setOcfResourceHostCoaps(resource);
-    getOcfSwitchResource(resource, resourceSid);
-  }
-
-  std::cout << "\tList of resource types: " << std::endl;
-  for(auto &resourceTypes : resource->getResourceTypes()) {
-    std::cout << "\t\t" << resourceTypes << std::endl;
-  }
-}
-
 
 
 
@@ -402,22 +249,18 @@ std::string stringToHexString(const std::string& input) {
   return output;
 }
 
-static FILE* client_open(const char* path, const char* mode)
-{
-    std::cout <<"client_open. Path: "<< path << std::endl;
-    if (0 == strcmp(path, OC_SECURITY_DB_DAT_FILE_NAME))
-    {
-        auto res = fopen("./client.dat", mode);
-        if (res!=NULL) 
-          std::cout << "Opened file ./client.dat" << std::endl;
-        else
-          std::cout << "Failed to open file ./client.dat" << std::endl;
-        return res;
-    }
+static FILE* client_open(const char* path, const char* mode) {
+  std::cout <<"client_open. Path: "<< path << std::endl;
+  if (0 == strcmp(path, OC_SECURITY_DB_DAT_FILE_NAME)) {
+    auto res = fopen("./client.dat", mode);
+    if (res!=NULL) 
+      std::cout << "Opened file ./client.dat" << std::endl;
     else
-    {
-        return fopen(path, mode);
-    }
+      std::cout << "Failed to open file ./client.dat" << std::endl;
+    return res;
+  } else {
+     return fopen(path, mode);
+  }
 }
 
 const char * getLastErrorText( int a_nError ) {
