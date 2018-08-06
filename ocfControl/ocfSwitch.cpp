@@ -11,6 +11,8 @@
 #include "../ocflightclient.hpp"
 
 
+
+
 static FILE* client_open(const char* path, const char* mode) {
   std::cout <<"client_open. Path: "<< path << std::endl;
   if (0 == strcmp(path, OC_SECURITY_DB_DAT_FILE_NAME)) {
@@ -39,7 +41,7 @@ void handle_signal(int signal)
 // starts the client 
 int main (int argc, char* argv[]) {
 
-  if (argc !=1 ) {
+  if (argc !=2 ) {
     std::cout << "Usage: ./ocfSwitch <0|1>" << std::endl;
     return 0;
   }
@@ -62,15 +64,9 @@ int main (int argc, char* argv[]) {
   sigaction(SIGINT, &sa, NULL);
   std::cout << "Press Ctrl-C to quit...." << std::endl;
 
+  discoverOcfResources(postBinarySwitch, strcmp(argv[1],"1")==0);
 
-  OCPlatform::findResource("", OC_RSRVD_WELL_KNOWN_URI, CT_DEFAULT, &foundResource);
-  std::cout << "Called findResource" << std::endl;
-
-
-  do {
-    usleep(2000000);
-  } while (quit != 1);
-
+  usleep(2000000);
 
   // Perform platform clean up.
   OC_VERIFY(OCPlatform::stop() == OC_STACK_OK);

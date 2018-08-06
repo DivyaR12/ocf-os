@@ -45,6 +45,8 @@ struct ocDeviceType {
 
 typedef std::map <std::string, ocDeviceType > sidToDeviceMapType;
 
+enum findOperation { getBinarySwitch, postBinarySwitch };
+
 extern sidToDeviceMapType foundDevices;
 extern std::mutex foundDevicesMutex;
 extern subRiToSidMapType subRiToSidMap;
@@ -59,8 +61,7 @@ void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string 
 
 void setOcfResourceHostCoaps(std::shared_ptr<OC::OCResource> resource);
 
-void foundResource(std::shared_ptr<OC::OCResource> resource);
-
+void discoverOcfResources( findOperation op, bool value);
 
 #endif
 

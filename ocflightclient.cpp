@@ -103,39 +103,46 @@ if (!ip4coaps.empty()) {
   }
 }
 
-void foundResource(std::shared_ptr<OC::OCResource> resource) {
-  std::cout << "Found resource" << std::endl;
-  std::unique_lock<std::mutex> lock(foundDevicesMutex);
-  auto resourceSid = resource->sid();
-  std::cout << "Found resource " << resource->uniqueIdentifier() <<
-                " on server with ID: "<< resourceSid <<std::endl;
-  auto resourceUri = resource->uri();
-  std::cout << "\tURI of the resource: " << resourceUri << std::endl;
+void discoverOcfResources( findOperation op, bool value) {
+  auto foundResourceLambda = [op, value] (std::shared_ptr<OC::OCResource> resource) {
+    std::cout << "Found resource Lambda" << std::endl;
+    std::unique_lock<std::mutex> lock(foundDevicesMutex);
+    auto resourceSid = resource->sid();
+    std::cout << "Found resource " << resource->uniqueIdentifier() <<std::endl;
+    auto resourceUri = resource->uri();
+    std::cout << "\tURI of the resource: " << resourceUri << std::endl;
 
-  if (foundDevices.find(resourceSid)==foundDevices.end()) {
-    std::cout << "\tNew SID: " << resourceSid << std::endl;
-    foundDevices[resourceSid].resources[resourceUri]=resource;
-  } else {
-    if (foundDevices[resourceSid].resources.find(resourceUri) == foundDevices[resourceSid].resources.end()) {
-      std::cout << "\tExisting SID and new URI" << std::endl;
+    if (foundDevices.find(resourceSid)==foundDevices.end()) {
+      std::cout << "\tNew SID: " << resourceSid << std::endl;
       foundDevices[resourceSid].resources[resourceUri]=resource;
     } else {
-      std::cout << "\tExisting SID and existing URI" << std::endl;
-      return;
+      if (foundDevices[resourceSid].resources.find(resourceUri) == foundDevices[resourceSid].resources.end()) {
+        std::cout << "\tExisting SID and new URI" << std::endl;
+        foundDevices[resourceSid].resources[resourceUri]=resource;
+      } else {
+        std::cout << "\tExisting SID and existing URI" << std::endl;
+        return;
+      }
     }
-  }
-  if (resourceUri == "/oic/d")
-    getOcfDeviceResource(resource, resourceSid);
+    if (resourceUri == "/oic/d")
+      getOcfDeviceResource(resource, resourceSid);
   
-  if (resourceUri == "/binaryswitch") {
-    setOcfResourceHostCoaps(resource);
-    getOcfSwitchResource(resource, resourceSid);
-  }
+    if (resourceUri == "/binaryswitch") {
+      setOcfResourceHostCoaps(resource);
+      if (op==getBinarySwitch)
+        getOcfSwitchResource(resource, resourceSid);
+      else
+        postSwitchValue(resource, value);
+    }
 
-  std::cout << "\tList of resource types: " << std::endl;
-  for(auto &resourceTypes : resource->getResourceTypes()) {
-    std::cout << "\t\t" << resourceTypes << std::endl;
-  }
+    std::cout << "\tList of resource types: " << std::endl;
+    for(auto &resourceTypes : resource->getResourceTypes()) {
+      std::cout << "\t\t" << resourceTypes << std::endl;
+    }
+  };
+  OCPlatform::findResource("", OC_RSRVD_WELL_KNOWN_URI, CT_DEFAULT, foundResourceLambda);
+  std::cout << "Called findResource" << std::endl;
+
 }
 
 

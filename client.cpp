@@ -409,8 +409,7 @@ int main (int argc, char* argv[]) {
   }
 
 
-  OCPlatform::findResource("", OC_RSRVD_WELL_KNOWN_URI, CT_DEFAULT, &foundResource);
-  std::cout << "Called findResource" << std::endl;
+  discoverOcfResources(getBinarySwitch, false);
 
   do {
     usleep(2000000);
