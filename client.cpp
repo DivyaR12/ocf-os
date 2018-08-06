@@ -6,6 +6,8 @@
  * ATIS' Intellectual Property Rights Policy.
  */
 
+#define __WITH_DTLS__
+
 #include <signal.h>
 #include <thread>
 #include <functional>
@@ -23,6 +25,7 @@
 #include "ocpayload.h"
 #include "onem2m.hxx"
 #include "SimpleOpt.h"
+
 
 using namespace OC;
 using namespace ::onem2m;
@@ -67,9 +70,11 @@ void getOcfSwitchResource(std::shared_ptr<OC::OCResource> resource, std::string 
     std::unique_lock<std::mutex> lock(foundDevicesMutex);
     if (eCode == OC_STACK_OK && foundDevices.find(resourceSid)!=foundDevices.end()) {
       foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
+      std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
     } else
-     std::cout << "Stack error in onGetSwitch or can't match SID!" << std::endl;
+     std::cout << "\tStack error in onGetSwitch or can't match SID!. ecode: " << eCode << std::endl;
   };
+  std::cout << "getOcfSwitchResource. Host: " << resource->host() << std::endl;
   QueryParamsMap test;
   resource->get(test, onGetSwitchLambda);
 }
@@ -100,6 +105,31 @@ void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string 
   resource->get(test, onGetLambda);
 }
 
+void setOcfResourceHostCoaps(std::shared_ptr<OC::OCResource> resource) {
+  std::cout<<"Current host: "<< resource->host()<< std::endl;
+  auto hosts = resource->getAllHosts();
+  const std::string coap6url="coaps://[";
+  const std::string coap4url="coaps://";
+  std::string ip6coaps="";
+  std::string ip4coaps="";
+  for( auto h:hosts) {
+    std::cout<<"\tHost: " << h << std::endl;
+    if (h.compare(0, coap6url.length(), coap6url) == 0)
+      ip6coaps=h;
+    else if (h.compare(0, coap4url.length(), coap4url) == 0)
+      ip4coaps=h;
+  }/*
+  if (!ip6coaps.empty()) {
+    std::cout << "Setting host to: " << ip6coaps << std::endl;
+    resource->setHost(ip6coaps);
+  } else */
+if (!ip4coaps.empty()) {
+    std::cout << "\tSetting host to: " << ip4coaps << std::endl;
+    resource->setHost(ip4coaps);
+    std::cout <<"\tHost is now: "<< resource->host()<<std::endl;
+    std::cout <<"\tTransport is now: "<<resource->connectivityType()<<std::endl;
+  }
+}
 
 void foundResource(std::shared_ptr<OC::OCResource> resource) {
   std::cout << "Found resource" << std::endl;
@@ -124,9 +154,11 @@ void foundResource(std::shared_ptr<OC::OCResource> resource) {
   }
   if (resourceUri == "/oic/d")
     getOcfDeviceResource(resource, resourceSid);
-
-  if (resourceUri == "/binaryswitch")
+  
+  if (resourceUri == "/binaryswitch") {
+    setOcfResourceHostCoaps(resource);
     getOcfSwitchResource(resource, resourceSid);
+  }
 
   std::cout << "\tList of resource types: " << std::endl;
   for(auto &resourceTypes : resource->getResourceTypes()) {
@@ -370,6 +402,24 @@ std::string stringToHexString(const std::string& input) {
   return output;
 }
 
+static FILE* client_open(const char* path, const char* mode)
+{
+    std::cout <<"client_open. Path: "<< path << std::endl;
+    if (0 == strcmp(path, OC_SECURITY_DB_DAT_FILE_NAME))
+    {
+        auto res = fopen("./client.dat", mode);
+        if (res!=NULL) 
+          std::cout << "Opened file ./client.dat" << std::endl;
+        else
+          std::cout << "Failed to open file ./client.dat" << std::endl;
+        return res;
+    }
+    else
+    {
+        return fopen(path, mode);
+    }
+}
+
 const char * getLastErrorText( int a_nError ) {
     switch (a_nError) {
     case SO_SUCCESS:            return "Success";
@@ -407,11 +457,13 @@ int main (int argc, char* argv[]) {
   ::std::string poaPort = "18888";
   ::std::string poaAddr = "127.0.0.1";
   bool deleteAe = false;
+  bool testOnly = false;
 
-  OCPersistentStorage ps{fopen, fread, fwrite, fclose, unlink};
+  OCPersistentStorage ps{client_open, fread, fwrite, fclose, unlink};
   PlatformConfig cfg {
     ServiceType::InProc,
-    ModeType::Client,
+    OC::ModeType::Both, // Have to set this if using security, even if we are a pure client, or else 
+                        // iotivity won't read the security .dat file
     &ps
   };
   OCPlatform::Configure(cfg);
@@ -426,12 +478,13 @@ int main (int argc, char* argv[]) {
   std::cout << "Press Ctrl-C to quit...." << std::endl;
 
   enum { optHostName, optAddress, optFrom, optPskIdentity, optPskKey, optPskKeyAscii, optDeleteAe,
-         optPoaPort, optPoaAddr };
+         optPoaPort, optPoaAddr, optTestOnly };
   CSimpleOpt::SOption  cmdOptions[] = {
   { optPskIdentity, "--pskIdentity", SO_REQ_SEP},
   { optPskKey, "--pskKey", SO_REQ_SEP},
   { optPskKeyAscii, "--pskKeyAscii", SO_REQ_SEP},
   { optDeleteAe, "--deleteAe", SO_NONE },
+  { optTestOnly, "--testOnly", SO_NONE },
   { optHostName, "-h", SO_REQ_SEP },
   { optAddress, "-a", SO_REQ_SEP },
   { optPoaPort, "--poaPort", SO_REQ_SEP },
@@ -472,6 +525,9 @@ int main (int argc, char* argv[]) {
         case optDeleteAe:
            deleteAe=true;
            break;
+        case optTestOnly:
+           testOnly=true;
+           break;
         default:
           std::cout << "Unexpected option" << std::endl;
           break;
@@ -486,8 +542,8 @@ int main (int argc, char* argv[]) {
 
 
   setFrom(fromField);
-
-  startServer(poaPort);   
+  if (! testOnly)
+    startServer(poaPort);   
 
   ::xml_schema::integer respObjType;
   std::unique_ptr< ::xml_schema::type > respObj;
@@ -499,12 +555,14 @@ int main (int argc, char* argv[]) {
     ::onem2m::terminate();
     return 0;
   }
-
-  bridgeAeId=fromField;
-  result = createAE(cseRootAddr, "ocfBridgeDemo", "", bridgeAeId, aeResourceName);
-  if (result != onem2mHttpCREATED) {
-    std::cout << "Unable to create AE resource. Problem with CSE? Exiting bridge app.\r\n";
-    return 1;
+ 
+  if (!testOnly) {
+    bridgeAeId=fromField;
+    result = createAE(cseRootAddr, "ocfBridgeDemo", "", bridgeAeId, aeResourceName);
+    if (result != onem2mHttpCREATED) {
+      std::cout << "Unable to create AE resource. Problem with CSE? Exiting bridge app.\r\n";
+      return 1;
+    }
   }
 
 
@@ -513,14 +571,15 @@ int main (int argc, char* argv[]) {
 
   do {
     usleep(2000000);
-    updateCseContainers (cseRootAddr+"/"+aeResourceName, "http://"+poaAddr+":"+poaPort+"/");
+    if (!testOnly)
+      updateCseContainers (cseRootAddr+"/"+aeResourceName, "http://"+poaAddr+":"+poaPort+"/");
   } while (quit != 1);
 
   // Perform platform clean up.
   OC_VERIFY(OCPlatform::stop() == OC_STACK_OK);
   std::cout<< "OC Stopped" << std::endl;
 
-  if (!aeResourceName.empty()) {
+  if (!aeResourceName.empty() && !testOnly) {
     std::cout << "Deleting AE \r\n";
     deleteResources( cseRootAddr +"/"+aeResourceName); 
   }
