@@ -1,3 +1,5 @@
 *.o
 client
 server/server
+ocfControl/ocfSwitch
+
