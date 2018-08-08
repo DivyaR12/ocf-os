@@ -324,7 +324,14 @@ static FILE* client_open(const char* path, const char* mode) {
     else
       std::cout << "Failed to open file ./client.dat" << std::endl;
     return res;
-  } else {
+  } else if (0 == strcmp(path, OC_INTROSPECTION_FILE_NAME)) {
+    auto res = fopen("./introspection.dat", mode);
+    if (res!=NULL) 
+      std::cout << "Opened file ./introspection.dat" << std::endl;
+    else
+      std::cout << "Failed to open file ./introspection.dat" << std::endl;
+    return res;
+   } else {
      return fopen(path, mode);
   }
 }
