@@ -266,7 +266,7 @@ onem2mResponseStatusCode processNotification(std::string host, std::string& from
         std::cout << "\tSID: " << thisSidPair->second << std::endl;
         auto  thisDevice = foundDevices.find(thisSidPair -> second);
         if (thisDevice != foundDevices.end() && thisDevice->second.isLight && 
-            thisDevice->second.resources.find("/binaryswitch") != thisDevice->second.resources.end()) {
+            !thisDevice->second.binarySwitchUri.empty()) {
           std::cout << "\tFound OCF light record" <<std::endl;
           ::xml_schema::integer rot;
           ::xml_schema::type* resObjPtr;
@@ -276,7 +276,7 @@ onem2mResponseStatusCode processNotification(std::string host, std::string& from
              if (ciPtr->content().present()) {
                bool newValue = ciPtr->content().get()=="1";
                std::cout << "\tNew value: "<< newValue << std::endl;
-               postSwitchValue(thisDevice->second.resources.find("/binaryswitch")->second, 
+               postSwitchValue(thisDevice->second.resources.find(thisDevice->second.binarySwitchUri)->second, 
                                newValue);
                thisDevice->second.value = newValue;
              }

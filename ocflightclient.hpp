@@ -41,6 +41,7 @@ struct ocDeviceType {
   bool gotValue = false;
   bool value = false;
   uriToResourceMapType resources;
+  std::string binarySwitchUri = "";
 };
 
 typedef std::map <std::string, ocDeviceType > sidToDeviceMapType;
@@ -55,7 +56,7 @@ void onPostSwitch(const HeaderOptions& headerOptions, const OCRepresentation& re
 
 void postSwitchValue(std::shared_ptr<OC::OCResource> resource, bool value);
 
-void getOcfSwitchResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid);
+void getResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string resourceSid);
 
 void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid);
 

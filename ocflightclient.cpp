@@ -36,19 +36,25 @@ void postSwitchValue(std::shared_ptr<OC::OCResource> resource, bool value) {
   resource->post(rep, QueryParamsMap(), &onPostSwitch);
 }
 
-void getOcfSwitchResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
-  auto onGetSwitchLambda = [resourceSid] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-    std::cout << "On Get Switch Lambda!" << std::endl;
-    std::unique_lock<std::mutex> lock(foundDevicesMutex);
-    if (eCode == OC_STACK_OK && foundDevices.find(resourceSid)!=foundDevices.end()) {
-      foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
-      std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
+void getResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
+  std::string resourceUri = resource->uri();
+  auto getResBinarySwitchLambda = [resourceSid, resourceUri] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
+    std::cout << "getResBinarySwitch Lambda!" << std::endl;
+    if (eCode==OC_STACK_OK) {
+      std::unique_lock<std::mutex> lock(foundDevicesMutex);
+      if (foundDevices.find(resourceSid)!=foundDevices.end()  ) {
+        foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
+        std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
+        foundDevices[resourceSid].binarySwitchUri= resourceUri;
+        std::cout<<"\tSet binarySwitchUri to: "<< resourceUri <<std::endl;
+      } else
+        std::cout << "Can't match SID!. SID: " << resourceSid << std::endl;
     } else
-     std::cout << "\tStack error in onGetSwitch or can't match SID!. ecode: " << eCode << std::endl;
+      std::cout << "\t Stack error. eCode: "<< eCode << std::endl;
   };
-  std::cout << "getOcfSwitchResource. Host: " << resource->host() << std::endl;
+  std::cout << "getOcfVerticalResource. URI: " << resourceUri << std::endl;
   QueryParamsMap test;
-  resource->get(test, onGetSwitchLambda);
+  resource->get(test, getResBinarySwitchLambda);
 }
 
 
@@ -61,12 +67,29 @@ void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string 
       rep.getValue("n", name);
       std::replace( name.begin(), name.end(), ' ', '_'); // Remove whitespace in names
       auto types = rep.getResourceTypes();
+      for (auto & t : types)
+        std::cout << "\tResource Type: "<< t << std::endl;
       {
         std::unique_lock<std::mutex> lock(foundDevicesMutex);
         if (foundDevices.find(resourceSid)!=foundDevices.end()) {
-          foundDevices[resourceSid].deviceName = name;
-          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end();
-           std::cout << "\tStored name in foundDevices" << std::endl;
+          bool uniqueName = true;
+          for (auto & d : foundDevices)
+            if (d.second.deviceName == name) {
+              uniqueName=false;
+              break;
+          }
+          if (uniqueName)
+            foundDevices[resourceSid].deviceName = name;
+          else // Add SID to create uniqueName
+            foundDevices[resourceSid].deviceName = name +"_"+ resourceSid;
+          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end()
+// *********************************************************************
+// Very bad hack to work around problem on CTT tool;
+          || name == "Device_1";
+// *********************************************************************
+           std::cout << "\tStored name: " << foundDevices[resourceSid].deviceName << 
+                        " in foundDevices. With isLight: "
+           << foundDevices[resourceSid].isLight << std::endl;
         } else
         std::cout << "\tError: found name for unknown SID: " << resourceSid << std::endl;
       }
@@ -124,21 +147,24 @@ void discoverOcfResources( findOperation op, bool value) {
         return;
       }
     }
+    auto types = resource->getResourceTypes();
+    std::cout << "\tList of resource types: " << std::endl;
+    for(auto &resourceTypes : types ) {
+      std::cout << "\t\t" << resourceTypes << std::endl;
+    }
+
     if (resourceUri == "/oic/d")
       getOcfDeviceResource(resource, resourceSid);
   
-    if (resourceUri == "/binaryswitch" || resourceUri == "/BinarySwitchResURI") {
+    if (std::find(types.begin(), types.end(), "oic.r.switch.binary") != types.end() )  {
       setOcfResourceHostCoaps(resource);
       if (op==getBinarySwitch)
-        getOcfSwitchResource(resource, resourceSid);
+        getResBinarySwitch(resource, resourceSid);
       else
         postSwitchValue(resource, value);
     }
 
-    std::cout << "\tList of resource types: " << std::endl;
-    for(auto &resourceTypes : resource->getResourceTypes()) {
-      std::cout << "\t\t" << resourceTypes << std::endl;
-    }
+
   };
   OCPlatform::findResource("", OC_RSRVD_WELL_KNOWN_URI, CT_DEFAULT, foundResourceLambda);
   std::cout << "Called findResource" << std::endl;
