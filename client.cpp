@@ -14,6 +14,72 @@
 
 using namespace ::onem2m;
 
+OCPlatformInfo platformInfo;
+
+void duplicateString(char ** targetString, const std::string & sourceString) {
+  *targetString = new char[sourceString.length() + 1];
+  strncpy(*targetString, sourceString.c_str(), (sourceString.length() + 1));
+}
+
+void setPlatformInfo() {
+  duplicateString(&platformInfo.platformID, "FEDCBA98-7654-3210-0123-456789ABCDEF");
+  duplicateString(&platformInfo.manufacturerName, "OS-IoT Demo");
+  duplicateString(&platformInfo.manufacturerUrl, "https://www.os-iot.org/");
+  duplicateString(&platformInfo.modelNumber, "modelNumber");
+  duplicateString(&platformInfo.dateOfManufacture, "2018-08-01");
+  duplicateString(&platformInfo.platformVersion, "0.1");
+  duplicateString(&platformInfo.operatingSystemVersion, "myOS");
+  duplicateString(&platformInfo.hardwareVersion, "0.1");
+  duplicateString(&platformInfo.firmwareVersion, "0.1");
+  duplicateString(&platformInfo.supportUrl,  "https://www.os-iot.org/");
+  duplicateString(&platformInfo.systemTime, "2018-08-01T12:00:00.52Z");
+}
+
+OCStackResult setDeviceInfo() {
+  std::string  deviceName = "OS-IoT_Bridge";
+  std::string  deviceType = "oic.d";
+  std::string  specVersion = "ocf.1.0.0";
+  std::vector<std::string> dataModelVersions;
+  dataModelVersions.push_back("ocf.res.1.3.0");
+  dataModelVersions.push_back("ocf.sh.1.3.0");
+  std::string  protocolIndependentID = "ffffffff-aaaa-9999-8888-777777777777";
+  OCStackResult result = OC_STACK_ERROR;
+
+  OCResourceHandle handle = OCGetResourceHandleAtUri(OC_RSRVD_DEVICE_URI);
+  if (handle == NULL) {
+     std::cout << "Failed to find resource " << OC_RSRVD_DEVICE_URI << std::endl;
+     return result;
+  }
+//  result = OCBindResourceTypeToResource(handle, deviceType.c_str());
+//  if (result != OC_STACK_OK) {
+//     std::cout << "Failed to add device type" << std::endl;
+//     return result;
+//  }
+  result = OCPlatform::setPropertyValue(PAYLOAD_TYPE_DEVICE, OC_RSRVD_DEVICE_NAME, deviceName);
+  if (result != OC_STACK_OK) {
+    std::cout << "Failed to set device name" << std::endl;
+    return result;
+  }
+  result = OCPlatform::setPropertyValue(PAYLOAD_TYPE_DEVICE, OC_RSRVD_DATA_MODEL_VERSION,
+                                          dataModelVersions);
+  if (result != OC_STACK_OK) {
+     std::cout << "Failed to set data model versions" << std::endl;
+     return result;
+  }
+  result = OCPlatform::setPropertyValue(PAYLOAD_TYPE_DEVICE, OC_RSRVD_SPEC_VERSION, specVersion);
+  if (result != OC_STACK_OK) {
+     std::cout << "Failed to set spec version" << std::endl;
+     return result;
+  }
+  result = OCPlatform::setPropertyValue(PAYLOAD_TYPE_DEVICE, OC_RSRVD_PROTOCOL_INDEPENDENT_ID,
+                                          protocolIndependentID);
+  if (result != OC_STACK_OK) {
+     std::cout << "Failed to set piid" << std::endl;
+     return result;
+  }
+
+  return OC_STACK_OK;
+}
 
 
 std::unique_ptr< ::xml_schema::type >  retrieveResources (const ::std::string & cse_root_addr, long & result,  		::xml_schema::integer & respObjType) {
@@ -302,6 +368,7 @@ int main (int argc, char* argv[]) {
   bool deleteAe = false;
   bool testOnly = false;
 
+  setPlatformInfo();
   OCPersistentStorage ps{client_open, fread, fwrite, fclose, unlink};
   PlatformConfig cfg {
     ServiceType::InProc,
@@ -312,6 +379,12 @@ int main (int argc, char* argv[]) {
   OCPlatform::Configure(cfg);
   OC_VERIFY(OCPlatform::start() == OC_STACK_OK);
   std::cout << "OC Started" << std::endl;
+
+  OC_VERIFY(OCPlatform::registerPlatformInfo(platformInfo) == OC_STACK_OK);
+  std::cout << "OC Platform Info Registered" << std::endl;
+
+  OC_VERIFY(setDeviceInfo() == OC_STACK_OK);
+  std::cout << "OC Device Info Registered" << std::endl;
 
   struct sigaction sa;
   sigfillset(&sa.sa_mask);

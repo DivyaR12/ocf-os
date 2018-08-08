@@ -127,7 +127,7 @@ void discoverOcfResources( findOperation op, bool value) {
     if (resourceUri == "/oic/d")
       getOcfDeviceResource(resource, resourceSid);
   
-    if (resourceUri == "/binaryswitch") {
+    if (resourceUri == "/binaryswitch" || resourceUri == "/BinarySwitchResURI") {
       setOcfResourceHostCoaps(resource);
       if (op==getBinarySwitch)
         getOcfSwitchResource(resource, resourceSid);
