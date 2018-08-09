@@ -52,12 +52,34 @@ void getResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string re
     } else
       std::cout << "\t Stack error. eCode: "<< eCode << std::endl;
   };
-  std::cout << "getOcfVerticalResource. URI: " << resourceUri << std::endl;
+  std::cout << "getBinarySwitchResource. URI: " << resourceUri << std::endl;
   QueryParamsMap test;
   resource->get(test, getResBinarySwitchLambda);
 }
 
-
+void observeResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
+  auto observeResBinarySwitchLambda = [resourceSid] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode, const int sequenceNumber) {
+    std::cout << "observeResBinarySwitchLambda Lambda!" << std::endl;
+    if (eCode==OC_STACK_OK) {
+      std::cout<<"\tStack OK"<<std::endl;
+/*
+      std::unique_lock<std::mutex> lock(foundDevicesMutex);
+      if (foundDevices.find(resourceSid)!=foundDevices.end()  ) {
+        foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
+        std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
+        foundDevices[resourceSid].binarySwitchUri= resourceUri;
+        std::cout<<"\tSet binarySwitchUri to: "<< resourceUri <<std::endl;
+      } else
+        std::cout << "Can't match SID!. SID: " << resourceSid << std::endl;
+*/
+    } else
+      std::cout << "\t Stack error. eCode: "<< eCode << std::endl;
+  };
+  std::cout << "observeBinarySwitchResource." << std::endl;
+  QueryParamsMap test;
+  const ObserveType OBSERVE_TYPE_TO_USE = ObserveType::Observe;
+  resource->observe(OBSERVE_TYPE_TO_USE, test, observeResBinarySwitchLambda);
+}
 
 void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
  auto onGetLambda = [resourceSid] ( const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
@@ -154,9 +176,10 @@ void discoverOcfResources( findOperation op, bool value) {
   
     if (std::find(types.begin(), types.end(), "oic.r.switch.binary") != types.end() )  {
       setOcfResourceHostCoaps(resource);
-      if (op==getBinarySwitch)
+      if (op==getBinarySwitch) {
         getResBinarySwitch(resource, resourceSid);
-      else
+        observeResBinarySwitch(resource, resourceSid);
+      } else
         postSwitchValue(resource, value);
     }
 
