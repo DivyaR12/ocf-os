@@ -82,11 +82,7 @@ void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string 
             foundDevices[resourceSid].deviceName = name;
           else // Add SID to create uniqueName
             foundDevices[resourceSid].deviceName = name +"_"+ resourceSid;
-          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end()
-// *********************************************************************
-// Very bad hack to work around problem on CTT tool;
-          || name == "Device_1";
-// *********************************************************************
+          foundDevices[resourceSid].isLight = std::find(types.begin(), types.end(), "oic.d.light") != types.end();
            std::cout << "\tStored name: " << foundDevices[resourceSid].deviceName << 
                         " in foundDevices. With isLight: "
            << foundDevices[resourceSid].isLight << std::endl;
@@ -96,8 +92,8 @@ void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string 
     } else
        std::cout << "Stack error in onGet!" << std::endl;
   }; // End of onGetLambda
-  QueryParamsMap test;
-  resource->get(test, onGetLambda);
+  QueryParamsMap queryStr = {{"if","oic.if.baseline"}}; // Need to use the baseline interface to ensure that "rt" is provided
+  resource->get(queryStr, onGetLambda);
 }
 
 void setOcfResourceHostCoaps(std::shared_ptr<OC::OCResource> resource) {
