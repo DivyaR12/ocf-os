@@ -33,13 +33,16 @@ namespace PH = std::placeholders;
 
 typedef std::map <std::string, std::shared_ptr<OC::OCResource> > uriToResourceMapType;
 typedef std::map <std::string, std::string> subRiToSidMapType;
+enum updateSource { noUpdate, fromOnem2m, fromOcf };
 
 struct ocDeviceType {
   std::string deviceName = "";
   bool isLight = false;
   bool isInCse = false;
   bool gotValue = false;
-  bool value = false;
+  bool lastSetValue = false;
+  updateSource lastUpdateFrom = noUpdate;
+  bool lastUpdateValue = false;
   uriToResourceMapType resources;
   std::string binarySwitchUri = "";
 };

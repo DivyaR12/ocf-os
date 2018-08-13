@@ -103,7 +103,7 @@ class BinaryswitchResource : public Resource
          *
          * @return OC_STACK_OK on success
          */
-        OCStackResult sendNotification();
+        OCStackResult sendNotification(const std::shared_ptr< OCResourceResponse > pResponse);
     private:
 
         /*
@@ -228,12 +228,21 @@ OCStackResult BinaryswitchResource::registerResource(uint8_t resourceProperty)
     return result;
 }
 
-OCStackResult BinaryswitchResource::sendNotification(void)
+OCStackResult BinaryswitchResource::sendNotification(const std::shared_ptr< OCResourceResponse > pResponse)
 {
     OCStackResult sResult = OC_STACK_OK;
     if ( m_interestedObservers.size() > 0) {
         std::cout << "Notifying list "  << m_interestedObservers.size() << " of observers\n";
-        auto pResponse = std::make_shared<OC::OCResourceResponse>();
+        //auto pResponse = std::make_shared<OC::OCResourceResponse>();
+        // Iain Sharp update to include value in observe response.
+        // pResponse->setRequestHandle(request->getRequestHandle());
+        // pResponse->setResourceHandle(request->getResourceHandle());
+        //pResponse->setResourceRepresentation(get(queries), "");
+         //       if(OC_STACK_OK == OCPlatform::sendResponse(pResponse))
+         //       {
+          //          ehResult = OC_EH_OK;
+         //       }
+          //  }
         sResult = OCPlatform::notifyListOfObservers(m_resourceHandle,
                                                     m_interestedObservers,
                                                     pResponse);
@@ -534,7 +543,7 @@ OCEntityHandlerResult BinaryswitchResource::entityHandler(std::shared_ptr<OCReso
                         pResponse->setResourceRepresentation(get(queries), "");
                         if (OC_STACK_OK == OCPlatform::sendResponse(pResponse))
                         {
-                            if (OC_STACK_OK != sendNotification() )
+                            if (OC_STACK_OK != sendNotification(pResponse) )
                             {
                                 std::cerr << "NOTIFY failed." << std::endl;
                             }

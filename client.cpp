@@ -220,29 +220,42 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
   std::unique_lock<std::mutex> lock(foundDevicesMutex);
   long result;
   for (auto & x : foundDevices) {
-    if (x.second.isLight && (! x.second.isInCse) && (! x.second.deviceName.empty())) {
-      std::cout << "New light: "<<x.second.deviceName<<std::endl;
-      result = createContainer(aeAddr, x.second.deviceName);
-      if (result == onem2mHttpCREATED) {
-        x.second.isInCse = true;
-        std::cout<<"Container created, name: "<<x.second.deviceName<<std::endl;
-        if (x.second.gotValue) {
-          result = createContentInstance(aeAddr+"/"+x.second.deviceName,x.second.value?"1":"0");
-          if (result == onem2mHttpCREATED) 
-            std::cout << "CI Created" << std::endl;
-          else
-            std::cout <<"Error creating CI: "<< result << std::endl;
-        }
-        std::string subResId = "";
-        result = createSubscription( aeAddr+"/"+x.second.deviceName, poa, subResId);
-        if (result == onem2mHttpCREATED && !subResId.empty()) {
-          std::cout << "Subscription Created. ID: " << subResId << std::endl;
-          if (!subResId.empty())
-            subRiToSidMap[subResId] = x.first;
+    auto & curDevice = x.second;
+    if (curDevice.isLight && (! curDevice.deviceName.empty())) {
+      if (! curDevice.isInCse) {
+        std::cout << "New light: "<<curDevice.deviceName<<std::endl;
+        result = createContainer(aeAddr, curDevice.deviceName);
+        if (result == onem2mHttpCREATED) {
+          curDevice.isInCse = true;
+          std::cout<<"Container created, name: "<<curDevice.deviceName<<std::endl;
+          std::string subResId = "";
+          result = createSubscription( aeAddr+"/"+curDevice.deviceName, poa, subResId);
+          if (result == onem2mHttpCREATED && !subResId.empty()) {
+            std::cout << "Subscription Created. ID: " << subResId << std::endl;
+            if (!subResId.empty())
+              subRiToSidMap[subResId] = x.first;
+          } else
+            std::cout <<"Error creating Subscription: "<< result << std::endl;
         } else
-          std::cout <<"Error creating Subscription: "<< result << std::endl;
-      } else
-        std::cout<<"Error creating container: "<< result <<std::endl;
+          std::cout<<"Error creating container: "<< result <<std::endl;
+      }
+      if (curDevice.isInCse && curDevice.lastUpdateFrom != noUpdate ) { // Got to update value of device
+        if (!curDevice.gotValue || curDevice.lastUpdateValue != curDevice.lastSetValue) {
+          curDevice.gotValue = true;
+          curDevice.lastSetValue = curDevice.lastUpdateValue; // Assume success
+          if (curDevice.lastUpdateFrom == fromOcf) {
+            result = createContentInstance(aeAddr+"/"+curDevice.deviceName,curDevice.lastUpdateValue?"1":"0");
+            if (result == onem2mHttpCREATED) 
+              std::cout << "Update CI to value " << curDevice.lastUpdateValue << std::endl;
+            else
+              std::cout <<"Error updating CI: "<< result << std::endl;
+           } else {
+             postSwitchValue( curDevice.resources.find(curDevice.binarySwitchUri)->second,
+                              curDevice.lastUpdateValue);
+           }
+         }
+       curDevice.lastUpdateFrom = noUpdate;
+      }
     }
   }
 }
@@ -258,15 +271,16 @@ onem2mResponseStatusCode processNotification(std::string host, std::string& from
     return rcOK;
   }
   if ( notif ) {
-    std::cout << "Notification" << std::endl;
+    std::cout << "oneM2M notification" << std::endl;
     if (notif->subscriptionReference().present()) {
       std::unique_lock<std::mutex> lock(foundDevicesMutex);
       auto thisSidPair = subRiToSidMap.find(notif->subscriptionReference().get());
       if(thisSidPair != subRiToSidMap.end()) {
         std::cout << "\tSID: " << thisSidPair->second << std::endl;
-        auto  thisDevice = foundDevices.find(thisSidPair -> second);
-        if (thisDevice != foundDevices.end() && thisDevice->second.isLight && 
-            !thisDevice->second.binarySwitchUri.empty()) {
+        auto  thisDeviceRec = foundDevices.find(thisSidPair -> second);
+        if (thisDeviceRec != foundDevices.end() && thisDeviceRec->second.isLight && 
+            !thisDeviceRec->second.binarySwitchUri.empty()) {
+          auto & thisDevice = thisDeviceRec->second;
           std::cout << "\tFound OCF light record" <<std::endl;
           ::xml_schema::integer rot;
           ::xml_schema::type* resObjPtr;
@@ -276,9 +290,8 @@ onem2mResponseStatusCode processNotification(std::string host, std::string& from
              if (ciPtr->content().present()) {
                bool newValue = ciPtr->content().get()=="1";
                std::cout << "\tNew value: "<< newValue << std::endl;
-               postSwitchValue(thisDevice->second.resources.find(thisDevice->second.binarySwitchUri)->second, 
-                               newValue);
-               thisDevice->second.value = newValue;
+               thisDevice.lastUpdateFrom = fromOnem2m;
+               thisDevice.lastUpdateValue = newValue;
              }
           }
         }
@@ -490,9 +503,8 @@ int main (int argc, char* argv[]) {
 
 
   discoverOcfResources(getBinarySwitch, false);
-
   do {
-    usleep(2000000);
+    usleep(50000);
     if (!testOnly)
       updateCseContainers (cseRootAddr+"/"+aeResourceName, "http://"+poaAddr+":"+poaPort+"/");
   } while (quit != 1);

@@ -39,12 +39,15 @@ void postSwitchValue(std::shared_ptr<OC::OCResource> resource, bool value) {
 void getResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
   std::string resourceUri = resource->uri();
   auto getResBinarySwitchLambda = [resourceSid, resourceUri] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode) {
-    std::cout << "getResBinarySwitch Lambda!" << std::endl;
+    std::cout << "getResBinarySwitchLambda!" << std::endl;
     if (eCode==OC_STACK_OK) {
       std::unique_lock<std::mutex> lock(foundDevicesMutex);
       if (foundDevices.find(resourceSid)!=foundDevices.end()  ) {
-        foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
-        std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
+         if (rep.getValue("value", foundDevices[resourceSid].lastUpdateValue) ) {
+          foundDevices[resourceSid].lastUpdateFrom = fromOcf;
+          std::cout<<"\tSID:"<<resourceSid<<" GET OCF set to value "<<foundDevices[resourceSid].lastUpdateValue<< std::endl;
+        } else
+          std::cout<<"\tSID:"<<resourceSid<<" GET OCF result, but couldn't get value." << std::endl;
         foundDevices[resourceSid].binarySwitchUri= resourceUri;
         std::cout<<"\tSet binarySwitchUri to: "<< resourceUri <<std::endl;
       } else
@@ -59,26 +62,26 @@ void getResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string re
 
 void observeResBinarySwitch(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
   auto observeResBinarySwitchLambda = [resourceSid] (const HeaderOptions& headerOptions, const OCRepresentation& rep, const int eCode, const int sequenceNumber) {
-    std::cout << "observeResBinarySwitchLambda Lambda!" << std::endl;
+    std::cout << "observeResBinarySwitchLambda!" << std::endl;
     if (eCode==OC_STACK_OK) {
       std::cout<<"\tStack OK"<<std::endl;
-/*
       std::unique_lock<std::mutex> lock(foundDevicesMutex);
       if (foundDevices.find(resourceSid)!=foundDevices.end()  ) {
-        foundDevices[resourceSid].gotValue = rep.getValue("value", foundDevices[resourceSid].value);
-        std::cout<<"\tSet SID:"<<resourceSid<<" to value "<<foundDevices[resourceSid].value<< std::endl;
-        foundDevices[resourceSid].binarySwitchUri= resourceUri;
-        std::cout<<"\tSet binarySwitchUri to: "<< resourceUri <<std::endl;
+        std::cout << "\tValue of value: "<< rep.getValueToString("value") << std::endl;
+        if (rep.getValue("value", foundDevices[resourceSid].lastUpdateValue) ) {
+          foundDevices[resourceSid].lastUpdateFrom = fromOcf;
+          std::cout<<"\tSID:"<<resourceSid<<" update from OCF to value "<<foundDevices[resourceSid].lastUpdateValue<< std::endl;
+        } else
+          std::cout<<"\tSID:"<<resourceSid<<" update from OCF, but couldn't get value." << std::endl;
       } else
-        std::cout << "Can't match SID!. SID: " << resourceSid << std::endl;
-*/
+        std::cout << "\tCan't match SID!. SID: " << resourceSid << std::endl;
     } else
       std::cout << "\t Stack error. eCode: "<< eCode << std::endl;
   };
   std::cout << "observeBinarySwitchResource." << std::endl;
-  QueryParamsMap test;
+  QueryParamsMap queryStr;
   const ObserveType OBSERVE_TYPE_TO_USE = ObserveType::Observe;
-  resource->observe(OBSERVE_TYPE_TO_USE, test, observeResBinarySwitchLambda);
+  resource->observe(OBSERVE_TYPE_TO_USE, queryStr, observeResBinarySwitchLambda);
 }
 
 void getOcfDeviceResource(std::shared_ptr<OC::OCResource> resource, std::string resourceSid) {
