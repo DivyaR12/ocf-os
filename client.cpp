@@ -175,6 +175,42 @@ long createContentInstance(const std::string& address, const std::string value) 
   return result;
 } 
 
+long createBinarySwitch(const ::std::string & address, const ::std::string & switchResourceName) {
+  long result;
+  
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+  
+  auto bs = hd::binarySwitch();
+  bs.powerState(false);
+  if (!switchResourceName.empty())
+    bs.resourceName(switchResourceName);
+  respObj = createResource(address, "1234", bs, result, respObjType); 
+  std::cout << "Create BinarySwitch result:" << result << "\n";
+  return result;
+}
+
+long createDeviceLight(const ::std::string & address, const ::std::string & lightResourceName) {
+  long result;
+  
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+  
+  auto dl = hd::deviceLight();
+  if (!lightResourceName.empty())
+    dl.resourceName(lightResourceName);
+  auto lb = labels ();
+  lb.push_back("DeviceLightLabel");
+  dl.labels(lb);
+  respObj = createResource(address, "1234", dl, result, respObjType); 
+  std::cout << "Create DeviceLight result:" << result << "\n";
+  if (respObjType == resourceTypeFlexContainerResource) {
+    auto fcPtr = static_cast< flexContainerResource* >(respObj.get()); // Cast generic object to pointer to the appropriate specific child class
+    createBinarySwitch(address+"/"+fcPtr->resourceName() . get(), "binarySwitch");
+  }
+  return result;
+}
+
 long createSubscription (const ::std::string& objectAddress, const std::string& notifUri, std::string& subsRi) {
   long result;
   
@@ -189,6 +225,7 @@ long createSubscription (const ::std::string& objectAddress, const std::string& 
 
   sub.resourceName("subscription");
   events.push_back( ::onem2m::updateOfResource ); // Add one notification case to the list of notification events
+  events.push_back( ::onem2m::createOfDirectChildResource );
   criteria.notificationEventType(events); // Assign the list of events to the criteria
   sub.eventNotificationCriteria(criteria); // Assign the criteria to the subscription
   sub.notificationContentType(nctAllAttributes);
@@ -202,6 +239,18 @@ long createSubscription (const ::std::string& objectAddress, const std::string& 
       subsRi= sPtr->resourceID() . get();
   }
   std::cout << "Create subscription result:" << result << "\n";
+  return result;
+}
+
+long updateBinarySwitch(const ::std::string & address, const bool value) {
+  long result;
+  ::xml_schema::integer respObjType;
+  std::unique_ptr< ::xml_schema::type > respObj;
+
+  auto bs = hd::binarySwitch();
+  bs.powerState(value);
+  respObj = updateResource(address, "9876", bs, result, respObjType); 
+  std::cout << "Update binarySwitch result:" << result << "\n";
   return result;
 }
 
@@ -224,10 +273,10 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
     if (curDevice.isLight && (! curDevice.deviceName.empty())) {
       if (! curDevice.isInCse) {
         std::cout << "New light: "<<curDevice.deviceName<<std::endl;
-        result = createContainer(aeAddr, curDevice.deviceName);
+        result = createDeviceLight(aeAddr, curDevice.deviceName);
         if (result == onem2mHttpCREATED) {
           curDevice.isInCse = true;
-          std::cout<<"Container created, name: "<<curDevice.deviceName<<std::endl;
+          std::cout<<"DeviceLight created, name: "<<curDevice.deviceName<<std::endl;
           std::string subResId = "";
           result = createSubscription( aeAddr+"/"+curDevice.deviceName, poa, subResId);
           if (result == onem2mHttpCREATED && !subResId.empty()) {
@@ -237,18 +286,18 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
           } else
             std::cout <<"Error creating Subscription: "<< result << std::endl;
         } else
-          std::cout<<"Error creating container: "<< result <<std::endl;
+          std::cout<<"Error creating deviceLight: "<< result <<std::endl;
       }
       if (curDevice.isInCse && curDevice.lastUpdateFrom != noUpdate ) { // Got to update value of device
         if (!curDevice.gotValue || curDevice.lastUpdateValue != curDevice.lastSetValue) {
           curDevice.gotValue = true;
           curDevice.lastSetValue = curDevice.lastUpdateValue; // Assume success
           if (curDevice.lastUpdateFrom == fromOcf) {
-            result = createContentInstance(aeAddr+"/"+curDevice.deviceName,curDevice.lastUpdateValue?"1":"0");
-            if (result == onem2mHttpCREATED) 
-              std::cout << "Update CI to value " << curDevice.lastUpdateValue << std::endl;
+            result = updateBinarySwitch(aeAddr+"/"+curDevice.deviceName+"/binarySwitch",curDevice.lastUpdateValue);
+            if (result == onem2mHttpOK) 
+              std::cout << "Update binarySwitch to value " << curDevice.lastUpdateValue << std::endl;
             else
-              std::cout <<"Error updating CI: "<< result << std::endl;
+              std::cout <<"Error updating binarySwitch: "<< result << std::endl;
            } else {
              postSwitchValue( curDevice.resources.find(curDevice.binarySwitchUri)->second,
                               curDevice.lastUpdateValue);
