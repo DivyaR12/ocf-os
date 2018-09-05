@@ -225,7 +225,6 @@ long createSubscription (const ::std::string& objectAddress, const std::string& 
 
   sub.resourceName("subscription");
   events.push_back( ::onem2m::updateOfResource ); // Add one notification case to the list of notification events
-  events.push_back( ::onem2m::createOfDirectChildResource );
   criteria.notificationEventType(events); // Assign the list of events to the criteria
   sub.eventNotificationCriteria(criteria); // Assign the criteria to the subscription
   sub.notificationContentType(nctAllAttributes);
@@ -278,7 +277,7 @@ void updateCseContainers (const std::string & aeAddr, const std::string & poa) {
           curDevice.isInCse = true;
           std::cout<<"DeviceLight created, name: "<<curDevice.deviceName<<std::endl;
           std::string subResId = "";
-          result = createSubscription( aeAddr+"/"+curDevice.deviceName, poa, subResId);
+          result = createSubscription( aeAddr+"/"+curDevice.deviceName+"/binarySwitch", poa, subResId);
           if (result == onem2mHttpCREATED && !subResId.empty()) {
             std::cout << "Subscription Created. ID: " << subResId << std::endl;
             if (!subResId.empty())
@@ -334,13 +333,19 @@ onem2mResponseStatusCode processNotification(std::string host, std::string& from
           ::xml_schema::integer rot;
           ::xml_schema::type* resObjPtr;
           resObjPtr = notif->getRepresentationObject(rot);
-          if (rot == resourceTypeContentInstance) {
-             auto ciPtr = static_cast< contentInstance* >(resObjPtr);
-             if (ciPtr->content().present()) {
-               bool newValue = ciPtr->content().get()=="1";
-               std::cout << "\tNew value: "<< newValue << std::endl;
-               thisDevice.lastUpdateFrom = fromOnem2m;
-               thisDevice.lastUpdateValue = newValue;
+          if (rot == resourceTypeFlexContainerResource) {
+             // Receiving a flexContainer we need to first inspect the containerDefinition to determine the
+             // internal type of the flexContainer and then re-cast to the HAIM resource type
+             auto fcPtr = static_cast< flexContainerResource* >(resObjPtr);
+             if (fcPtr->containerDefinition().present() && 
+                fcPtr->containerDefinition().get() == "org.onem2m.home.moduleclass.binarySwitch" ) {
+               auto bsPtr = static_cast< hd::binarySwitch* >(resObjPtr);
+               if (bsPtr->powerState().present()) {
+                 bool newValue = bsPtr->powerState().get();
+                 std::cout << "\tNew value: "<< newValue << std::endl;
+                 thisDevice.lastUpdateFrom = fromOnem2m;
+                 thisDevice.lastUpdateValue = newValue;
+               }
              }
           }
         }
