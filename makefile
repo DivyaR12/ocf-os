@@ -3,7 +3,7 @@
 
 KERNEL := $(shell uname -s)
 LOWER_KERNEL := $(shell echo $(KERNEL) | tr A-Z a-z)
-PROC := $(shell uname -p)
+PROC := $(shell lscpu | grep -e Architecture: |  sed s/Architecture:\\s*//)
 IOTIVITY_PATH := $(HOME)/iot/iotivity/out/$(LOWER_KERNEL)/$(PROC)/release/deploy
 OSIOT_PATH := $(HOME)/atis-os-iot
 
