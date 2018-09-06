@@ -1,7 +1,11 @@
 # Makefile
+.DEFAULT_GOAL := bridge
 
-IOTIVITY_PATH = /home/iain/iot/iotivity/out/linux/x86_64/release/deploy
-OSIOT_PATH = /home/iain/atis-os-iot
+KERNEL := $(shell uname -s)
+LOWER_KERNEL := $(shell echo $(KERNEL) | tr A-Z a-z)
+PROC := $(shell uname -p)
+IOTIVITY_PATH := $(HOME)/iot/iotivity/out/$(LOWER_KERNEL)/$(PROC)/release/deploy
+OSIOT_PATH := $(HOME)/atis-os-iot
 
 COMPFLAGS =  -Wall -std=c++11  -I$(IOTIVITY_PATH)/include/resource/stack \
 -I$(IOTIVITY_PATH)/include/resource \
@@ -13,18 +17,24 @@ LINKEDLIBS= -L$(IOTIVITY_PATH) -Wl,-rpath=$(IOTIVITY_PATH) \
 -L$(OSIOT_PATH) -Wl,--gc-sections,-rpath=$(OSIOT_PATH) \
 -loc -loc_internal -loctbstack -losiot -lssl -lcrypto -lxerces-c -lcurl -lpthread
 
-.PHONY: all clean
+.PHONY: all clean server ocfcontrol
 
-all: client
+all: bridge server ocfcontrol
 
-client: client.o ocflightclient.o
-	c++ $(LINKFLAGS) -o client client.o ocflightclient.o $(LINKEDLIBS)
+server:
+	cd server && make
 
-client.o: client.cpp ocflightclient.hpp
-	c++ $(COMPFLAGS) -c client.cpp
+ocfcontrol:
+	cd ocfControl && make
+
+bridge: bridge.o ocflightclient.o
+	c++ $(LINKFLAGS) -o bridge bridge.o ocflightclient.o $(LINKEDLIBS)
+
+bridge.o: bridge.cpp ocflightclient.hpp
+	c++ $(COMPFLAGS) -c bridge.cpp
 
 ocflightclient.o: ocflightclient.cpp ocflightclient.hpp
 	c++ $(COMPFLAGS) -c ocflightclient.cpp
 
 clean:
-	rm -f *.o client
+	rm -f *.o bridge

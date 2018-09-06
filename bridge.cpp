@@ -385,11 +385,11 @@ std::string stringToHexString(const std::string& input) {
 static FILE* client_open(const char* path, const char* mode) {
   std::cout <<"client_open. Path: "<< path << std::endl;
   if (0 == strcmp(path, OC_SECURITY_DB_DAT_FILE_NAME)) {
-    auto res = fopen("./client.dat", mode);
+    auto res = fopen("./bridge.dat", mode);
     if (res!=NULL) 
-      std::cout << "Opened file ./client.dat" << std::endl;
+      std::cout << "Opened file ./bridge.dat" << std::endl;
     else
-      std::cout << "Failed to open file ./client.dat" << std::endl;
+      std::cout << "Failed to open file ./bridge.dat" << std::endl;
     return res;
   } else if (0 == strcmp(path, OC_INTROSPECTION_FILE_NAME)) {
     auto res = fopen("./introspection.dat", mode);
