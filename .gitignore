@@ -1,5 +1,5 @@
 *.o
-client
+bridge
 server/server
 ocfControl/ocfSwitch
 
