@@ -14,6 +14,11 @@ LINKFLAGS =  -Wall -std=c++11
 LINKEDLIBS = -L$(IOTIVITY_PATH) -Wl,-rpath=$(IOTIVITY_PATH) \
 -loc -loc_internal -loctbstack
 
+ifdef GPIO
+LINKEDLIBS += -lsoc -l96BoardsGPIO 
+COMPFLAGS += -DGPIO="TRUE" 
+endif
+
 
 all: server
 

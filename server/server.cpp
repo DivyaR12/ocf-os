@@ -35,6 +35,15 @@
 #include "OCApi.h"
 #include "ocpayload.h"
 
+#ifdef GPIO
+// If building for demo on 96Boards
+extern "C" {
+  #include <unistd.h>
+  #include <gpio.h>
+}
+#define LED "GPIO-C"
+#endif
+
 using namespace OC;
 namespace PH = std::placeholders;
 
@@ -46,6 +55,15 @@ namespace PH = std::placeholders;
 */
 
 #define INTERFACE_KEY "if"
+
+void controlLight( bool value ) {
+#ifdef GPIO
+  if (value)
+    digitalWrite(gpio_id(LED),HIGH);
+  else
+    digitalWrite(gpio_id(LED),LOW);
+#endif
+}
 
 /*
 * default class, so that we have to define less variables/functions.
@@ -175,12 +193,16 @@ BinaryswitchResource::BinaryswitchResource(std::string resourceUri)
     // initialize vector rt  Resource Type
     m_var_value_rt.push_back("oic.r.switch.binary");
     m_var_value_value = false; // current value of property "value" Status of the switch
+    controlLight(false);
     }
 
 /*
 * Destructor code
 */
-BinaryswitchResource::~BinaryswitchResource() { }
+BinaryswitchResource::~BinaryswitchResource() 
+{
+    controlLight(false); 
+}
 
 OCStackResult BinaryswitchResource::registerResource(uint8_t resourceProperty)
 {
@@ -436,6 +458,7 @@ OCEntityHandlerResult BinaryswitchResource::post(QueryParamsMap queries, const O
                 m_var_value_value = temp;
               //  std::cout << "\t\t" << "property 'value' UPDATED: " << ((m_var_value_value) ? "true" : "false") << std::endl;
 		std::cout << "\t\t" << "LIGHT " << ((m_var_value_value) ? "ON" : "OFF") << std::endl;
+                controlLight( m_var_value_value );
             }
             else
             {
