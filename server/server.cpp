@@ -993,6 +993,14 @@ void handle_signal(int signal)
 // starts the server
 int main(void)
 {
+    #ifdef GPIO
+    if(gpio_open(gpio_id(LED), "out"))
+    {
+        std::cerr << "Unable to open GPIO output." << std::endl;
+      	return 1;
+    }
+    #endif
+
     Platform platform;
     if(OC_STACK_OK != platform.start())
     {
