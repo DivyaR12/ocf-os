@@ -1,0 +1,58 @@
+<html>
+<head>
+<Title>Lightss</Title>
+<script type="text/javascript">
+var xmlhttp = new XMLHttpRequest();
+
+function getData(path) {
+  xmlhttp.open("GET", path, true);
+  xmlhttp.send();
+}
+
+</script>
+<style>
+h1 {
+	font-family: sans-serif;
+	text-align: center
+}
+p {
+	font-family: sans-serif;
+	margin-top: 50px;
+}
+.cen {
+	display: block; 
+	margin-left: auto; 
+	margin-right: auto
+}
+.but {
+	display: block; 
+	margin-left: auto; 
+	margin-right: auto;
+	background-color: #7892c2;
+	font-family: sans-serif;
+	font-size: 24px;
+	font-weight: bold;
+	color: white;
+	border-radius:10px;
+	border:1px solid #4e6096;
+	outline:0;
+	padding:16px 37px;
+	margin-top:10px;
+	margin-bottom:30px;
+}
+.but:hover {
+	background-color:#476e9e
+}
+:link {
+    	text-decoration: none
+}
+</style>
+</head>
+<body>
+<h1>ATIS OS-IoT OCF/oneM2M Bridge Demo</h1>
+<img src="ocf.jpg" class="cen">
+<button onclick="getData('ocfon')" class="but">OCF Light On</button>
+<button onclick="getData('ocfoff')" class="but">OCF Light Off</button>
+<p><a href="index.html">Switch to oneM2M control</a></p>
+</body>
+</html>
