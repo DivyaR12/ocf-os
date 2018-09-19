@@ -35,6 +35,12 @@
 #include "OCApi.h"
 #include "ocpayload.h"
 
+#ifdef EXTCMD
+#include <stdlib.h>
+static const char onstr[] = "python ../demoWebServer/blinkton.py";
+static const char offstr[] = "python ../demoWebServer/blinktoff.py";
+#endif
+
 #ifdef GPIO
 // If building for demo on 96Boards
 extern "C" {
@@ -62,6 +68,12 @@ void controlLight( bool value ) {
     digitalWrite(gpio_id(LED),HIGH);
   else
     digitalWrite(gpio_id(LED),LOW);
+#endif
+#ifdef EXTCMD
+  if (value)
+    system(onstr);
+  else
+    system(offstr);
 #endif
 }
 

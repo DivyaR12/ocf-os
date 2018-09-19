@@ -19,6 +19,10 @@ LINKEDLIBS += -lsoc -l96BoardsGPIO
 COMPFLAGS += -DGPIO="TRUE" 
 endif
 
+ifdef EXTCMD
+COMPFLAGS += -DEXTCMD="TRUE"
+endif
+
 
 all: server
 
