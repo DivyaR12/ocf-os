@@ -5,7 +5,6 @@ from subprocess import Popen
 
 PORT_NUMBER = 8899
 commands = {
-	"/click" : "echo wibble",
 	"/ocfon" : "cd ../ocfControl && ./ocfSwitch 1",
 	"/ocfoff": "cd ../ocfControl && ./ocfSwitch 0",
 	"/onem2mon" : "cd ../onem2mControlAe && ./switch.sh 1",

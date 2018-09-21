@@ -1,0 +1,202 @@
+OS-IoT oneM2M/OCF BRIDGE DEMO - INSTALL AND BUILD INSTRUCTIONS
+==============================================================
+
+The following instructions can be used to install and build the OS-IoT oneM2M/OCF bridge and its dependencies on a wide variety of Linux computers. They have been tested on the DragonBoard 410C running Linaro and Raspberry Pi running Raspbian.
+
+On the DragonBoard 410C and the Raspberry Pi Zero it may be necessary to increase the swap size to have the build complete successfully. See instructions at the end of this document.
+
+NOTES: 
+- In the instructions below line starting ">" indicate commands intended to be typed by the user. Lines starting with # are comments.
+- Items in angle brackets (e.g. <example>) indicate values that should be substituted with the specifics for your configuration.
+- It is strongly recommended and assumed that all repositories are installed using their default paths in the user's home directory.
+
+# Setup the environment
+> cd ~
+> sudo apt-get -y update
+> sudo apt-get -y upgrade
+> sudo apt-get -y update
+> sudo apt-get -y install build-essential
+> sudo apt-get -y install curl
+
+# Use IOTivity-setup to install and build IoTivity and it's dependencies.
+# This is a long process and several of these steps may take more than an hour. 
+# This is also an area where memory problems due to lack of swap space may occur
+> curl https://openconnectivity.github.io/IOTivity-setup/install.sh | bash
+> cd iot
+> ./gen.sh
+> cd iotivity
+# This command is particularly long!
+> sudo scons TARGET_TRANSPORT=IP
+
+# Install and build the OS-IoT library
+> cd ~
+# Now, follow instructions on www.os-iot.org/build-and-install
+# To save duplicating steps, omit the steps involving the make command and instead 
+# use the commands below at the end of the process.
+> cd ~/atis-os-iot
+# Build the library, may be slow
+> make libosiotdyn
+# Build the command-line tool
+> make
+
+# Install and build the bridge and related applications
+> cd ~
+> git clone https://atis.codebasehq.com/atis-os-iot/ocfbridgeclient.git
+> cd ocfbridgeclient
+> make all
+
+
+
+
+INCREASE SWAP SIZE FOR DRAGONBOARD
+==================================
+
+Assumes you are using the internal memory as your main drive and a micro-SD card as a separate swap disk. Instructions are copied from:
+https://www.96boards.org/blog/how-to-develop-on-your-96boards/
+
+Step 1: See what shows, in my case I saw /dev/mmcblk0 and a bunch of sub partitions such as /dev/mmcblk0boot0 /dev/mmcblk0boot1 etc.
+
+> ls /dev/mmc*
+
+Step 2: Now insert the micro-SD card
+
+> ls /dev/mmc*
+
+Compare this to the prior ls before the card was inserted, you will likely see a new device or more. In my case I saw both the original /dev/mmcblk0 and I saw a new device /dev/mmcblk1 which was the inserted SD card.
+
+Step 3: Check for all mounted devices
+
+> df -hT
+
+This will show you all mounted devices on the system, if the SD card is formatted as a VFAT partition you will likely see a row like:
+
+/dev/mmcblk1p1 vfat 3.7G 2.5M 3.7G 1% /media/linaro/UNTITLED
+
+This indicates that it’s the first partition of the /dev/mmcblk1 device, and it’s a VFAT partition about ~4GB card with 1% of it in use.
+
+Step 4: Unmount the partition.
+
+> sudo umount /media/linaro/UNTITLED
+
+Step 5: Change format from a VFAT partition to a swap partition.
+
+> sudo fdisk /dev/mmcblk1
+
+Now you will see the fdisk menu:
+
+Welcome to fdisk (version info)
+
+Changes will remain in memory only, until you decide to write them.
+
+Be careful before using the write command
+
+Command (m for help):
+
+Step 6: Press lower case p to list the partition table on the SD card
+
+    p
+
+Disk /dev/mmcblk1: 3.7 GiB, 3965190144 bytes, 7744512 sectors
+
+Lines of misc info here
+
+Device Boot Start End Sectors Size Id Type
+
+/dev/mmcblk1p1 8192 77445511 7736320 3.7G b W95 FAT32
+
+Command (m for help):
+
+Step 7: Press lower case t
+
+    t
+
+Selected partition 1
+
+Partition type (type L to list all types):
+
+Step 8: Change type of partition by entering 82
+
+    82
+
+Change type of partition ‘W95 FAT32’ to ‘Linux swap / Solaris’.
+
+Command (m for help):
+
+Step 9: Exit back to command prompt by entering w
+
+    w
+
+Step 10: Set up swap space
+
+> sudo mkswap /dev/mmcblk1p1
+
+mkswap: /dev/mmcblk1p1: warning: wiping old vfat signature.
+
+Setting up swapspace version 1, size 3.7 GiB (3960991744 bytes)
+
+No label, UUID=
+
+$
+Mounting the swap partition
+
+Now mount the swap partition
+
+> sudo swapon /dev/mmcblk1p1
+
+> sudo swapon -s
+
+You should see something like:
+
+Filename Type Size Used Priority
+
+/dev/mmcblk1p1 partition 3868156 0 -1
+Unmounting the swap partition
+
+To unmount the swap partition when you are done using it:
+
+> sudo swapoff /dev/mmcblk1p1
+
+
+
+---------------------------------------------------------------------------------------------------------
+
+INCREASE SWAP SIZE FOR RASPBERRY PI
+===================================
+
+Copied from: https://www.bitpi.co/2015/02/11/how-to-change-raspberry-pis-swapfile-size-on-rasbian/
+
+
+
+The Raspbian distribution comes with a 100mb swapfile. This is actually a bit on the small side. A general rule of thumb is swapfile size should be about twice as much as the available RAM on the machine. In the examples below I have a Raspberry Pi B+. So the amount of swap I use is 1024mb.
+Commands
+
+We will change the configuration in the file */etc/dphys-swapfile *:
+
+> sudo nano /etc/dphys-swapfile
+
+The default value in Raspbian is:
+
+CONF_SWAPSIZE=100
+
+We will need to change this to:
+
+CONF_SWAPSIZE=1024
+
+Then you will need to stop and start the service that manages the swapfile own Rasbian:
+
+> sudo /etc/init.d/dphys-swapfile stop
+> sudo /etc/init.d/dphys-swapfile start
+
+You can then verify the amount of memory + swap by issuing the following command:
+
+> free -m
+
+The output should look like:
+
+total     used     free   shared  buffers   cached
+Mem:           435       56      379        0        3       16
+-/+ buffers/cache:       35      399
+Swap:         1023        0     1023
+
+
+

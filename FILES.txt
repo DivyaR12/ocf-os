@@ -1,0 +1,64 @@
+INDEX OF FILES IN THE OS-IOT OneM2M/OCF BRIDGE DEMO
+===================================================
+
+Directory: root
+Contains the bridge itself and documentation files
+
+bridge		: The bridge application, (output of build process)
+bridge.cpp	: Source code for the bridge application
+bridge.dat	: Compiled OCF security configuration file with the default settings for the bridge
+bridge.json	: OCF JSON security configuration file with the default settings for the bridge
+bridge_not_onboarded.dat: compiled OCF security file with not on-boarded security settings for the bridge
+bridge_not_onboarded.json: OCF security file with not on-boarded security settings for the bridge
+bridge_not_onboard.dat: OCF security file with bridge onboarded to the OCF conformance testing tool
+BUILD.txt	: Build instructions
+CONTRIBUTING.md	: How to contribute
+device_properties.dat: Tempoary local storage of OCF device properties file
+introspection.dat: Compiled OCF introspection information
+intropsection.json: OCF introspection information
+LICENSE.MD	: licensing information
+makefile	: configuration file for the "make" command
+ocfclient.cpp	: Source code for the OCF client used by the bridge
+ocfclient.hpp	: Header for the OCF client used by the bridge
+README.txt	: Guide to the demo
+
+
+Directory: demoWebServer
+Contains a web server and other python scripts to use in the demo
+blinktoff.py	: Python script to turn-off the lights on a Pimoroni Blinkt!
+blinkton.py	: Python script to turn-on the lights on a Pimoroni Blinkt!
+index.html	: Home page for web server, and page for oneM2M control
+ocf.html	: Web server page for OCF control
+ocf.jpg		: OCF logo
+onem2m.png	: oneM2M logo
+webServer.py	: Python web server and script to invoke external commands based on web input
+
+
+Directory: ocfControl
+Contains an application that can control an OCF light device (i.e. an OCF client)
+
+device_properties.dat: Tempoary local storage of OCF device properties file
+makefile	: configuration file for the "make" command
+ocfSwitch	: Command line application to switch light state using OCF (output of build process)
+ocfSwitch.cpp	: Source code for command line application to switch light state using OCF
+switch.dat	: Complied OCF security file
+switch.json	: OCF security configuration file
+
+
+Directory: oneM2MControlAE
+Contains shell scripts that use OS-IoT to control a oneM2M deviceLight
+
+switch.sh	: Script to switch a oneM2M deviceLight using the default name
+switchNamedDevice.sh: Script to switch a oneM2M deviceLight using a name specified in the parameters
+
+
+Directory: server
+Contains an OCF light device based on the output of OCF deviceBuilder (i.e. an OCF server)
+binaryswitch.json: Default OCF security configuration
+binaryswitchonboarded.json: Onboarded OCF security configuration
+device_properties.dat: Tempoary local storage of OCF device properties file
+makefile	: configuration file for the "make" command
+server		: The server application (output of the build process)
+server_introspection.dat: Compiled OCF introspection information
+server_security.dat: Compiled default OCF security configuration
+
